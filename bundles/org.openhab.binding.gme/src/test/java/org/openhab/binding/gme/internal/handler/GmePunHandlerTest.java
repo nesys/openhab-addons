@@ -12,7 +12,6 @@
  */
 package org.openhab.binding.gme.internal.handler;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.time.LocalDate;
