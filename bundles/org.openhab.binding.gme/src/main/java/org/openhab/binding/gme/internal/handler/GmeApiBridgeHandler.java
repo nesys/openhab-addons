@@ -28,6 +28,7 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.client.HttpClient;
 import org.openhab.binding.gme.internal.api.GmeApiClient;
+import org.openhab.binding.gme.internal.api.GmeApiException;
 import org.openhab.binding.gme.internal.api.GmeAuthManager;
 import org.openhab.binding.gme.internal.config.GmeApiConfiguration;
 import org.openhab.binding.gme.internal.model.GmeCredentialTracker;
@@ -153,6 +154,10 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
                 updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                         "@text/status.gme.authentication-failed [\"" + e.getMessage() + "\"]");
                 cancelAuthenticationRetry();
+                if (e instanceof GmeApiException apiError && apiError.getStatusCode() >= 400
+                        && apiError.getStatusCode() < 500) {
+                    return;
+                }
                 authenticationRetryJob = scheduler.schedule(
                         () -> authenticate(generation, config, Math.min(retrySeconds * 2, MAX_AUTH_RETRY_SECONDS)),
                         retrySeconds, TimeUnit.SECONDS);
