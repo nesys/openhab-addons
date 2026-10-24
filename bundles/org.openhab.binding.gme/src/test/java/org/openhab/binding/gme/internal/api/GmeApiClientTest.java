@@ -13,6 +13,7 @@
 package org.openhab.binding.gme.internal.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -71,6 +72,24 @@ class GmeApiClientTest {
         assertEquals("PUN", entries.getFirst().zone());
         assertEquals(1, entries.getFirst().hour());
         assertEquals(GmeGranularity.PT15, entries.getFirst().granularity());
+    }
+
+    @Test
+    void rejectsMalformedJsonInsideValidZip() throws IOException {
+        String contentResponse = zipAndEncode("[{ malformed json }]");
+
+        assertThrows(com.google.gson.JsonParseException.class,
+                () -> GmeApiClient.parseMarketPriceContentResponse(contentResponse));
+    }
+
+    @Test
+    void rejectsMissingPriceInsideValidZip() throws IOException {
+        String contentResponse = zipAndEncode("""
+                [{"FlowDate":"20260910","Hour":"1","Market":"MGP","Zone":"PUN","Period":"1"}]
+                """);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> GmeApiClient.parseMarketPriceContentResponse(contentResponse));
     }
 
     private static String zipAndEncode(String json) throws IOException {
