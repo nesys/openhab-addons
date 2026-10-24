@@ -151,7 +151,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
                     return;
                 }
                 updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
-                        "@text/status.gme.authentication-failed [\\"" + e.getMessage() + "\\"]");
+                        "@text/status.gme.authentication-failed [\"" + e.getMessage() + "\"]");
                 cancelAuthenticationRetry();
                 authenticationRetryJob = scheduler.schedule(
                         () -> authenticate(generation, config, Math.min(retrySeconds * 2, MAX_AUTH_RETRY_SECONDS)),
