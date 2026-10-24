@@ -63,6 +63,8 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
     private volatile String marketZone = "";
     private volatile GmeGranularity granularity = GmeGranularity.PT60;
     private @Nullable ScheduledFuture<?> passwordRefreshJob;
+    private @Nullable ScheduledFuture<?> authenticationRetryJob;
+    private static final long MAX_AUTH_RETRY_SECONDS = 300;
     private final AtomicLong lifecycleGeneration = new AtomicLong();
     private final Object lifecycleLock = new Object();
 
@@ -83,6 +85,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
         synchronized (lifecycleLock) {
             generation = lifecycleGeneration.incrementAndGet();
             cancelPasswordRefresh();
+            cancelAuthenticationRetry();
             authManager = null;
         }
 
@@ -112,40 +115,57 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
 
         updateStatus(ThingStatus.UNKNOWN);
 
-        scheduler.execute(() -> {
-            GmeAuthManager manager = new GmeAuthManager(apiClient, config.username, config.password);
+        scheduler.execute(() -> authenticate(generation, config, 5));
+    }
 
-            try {
-                manager.getToken();
+    private void authenticate(long generation, GmeApiConfiguration config, long retrySeconds) {
+        if (!isCurrentGeneration(generation)) {
+            return;
+        }
+        GmeAuthManager manager = new GmeAuthManager(apiClient, config.username, config.password);
+        try {
+            manager.getToken();
+            synchronized (lifecycleLock) {
                 if (!isCurrentGeneration(generation)) {
                     return;
                 }
-
-                synchronized (lifecycleLock) {
-                    if (!isCurrentGeneration(generation)) {
-                        return;
-                    }
-
-                    authManager = manager;
-                    credentialTracker.updateAfterSuccessfulAuthentication(config.username, config.password,
-                            config.initialPasswordChangedAt);
-                    updatePasswordChannels();
-                    schedulePasswordRefresh(generation);
-                    updateStatus(ThingStatus.ONLINE);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                cancelAuthenticationRetry();
+                authManager = manager;
+                credentialTracker.updateAfterSuccessfulAuthentication(config.username, config.password,
+                        config.initialPasswordChangedAt);
+                updatePasswordChannels();
+                schedulePasswordRefresh(generation);
+                updateStatus(ThingStatus.ONLINE);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            synchronized (lifecycleLock) {
                 if (isCurrentGeneration(generation)) {
                     updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                             "@text/status.gme.authentication-interrupted");
                 }
-            } catch (TimeoutException | ExecutionException | IllegalStateException e) {
-                if (isCurrentGeneration(generation)) {
-                    updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
-                            "@text/status.gme.authentication-failed [\"" + e.getMessage() + "\"]");
-                }
             }
-        });
+        } catch (TimeoutException | ExecutionException | IllegalStateException e) {
+            synchronized (lifecycleLock) {
+                if (!isCurrentGeneration(generation)) {
+                    return;
+                }
+                updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
+                        "@text/status.gme.authentication-failed [\\"" + e.getMessage() + "\\"]");
+                cancelAuthenticationRetry();
+                authenticationRetryJob = scheduler.schedule(
+                        () -> authenticate(generation, config, Math.min(retrySeconds * 2, MAX_AUTH_RETRY_SECONDS)),
+                        retrySeconds, TimeUnit.SECONDS);
+            }
+        }
+    }
+
+    private void cancelAuthenticationRetry() {
+        ScheduledFuture<?> job = authenticationRetryJob;
+        if (job != null) {
+            job.cancel(false);
+            authenticationRetryJob = null;
+        }
     }
 
     private void updatePasswordChannels() {
