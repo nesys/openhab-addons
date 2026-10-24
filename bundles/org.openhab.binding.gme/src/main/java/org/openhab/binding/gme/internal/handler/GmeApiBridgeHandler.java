@@ -60,7 +60,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
     private final long initialAuthRetrySeconds;
     private final GmeCredentialTracker credentialTracker;
     private final GmePasswordAge passwordAge;
-    private @Nullable GmeAuthManager authManager;
+    private volatile @Nullable GmeAuthManager authManager;
     private volatile int refreshInterval = 60;
     private volatile String marketZone = "";
     private volatile GmeGranularity granularity = GmeGranularity.PT60;
