@@ -154,7 +154,11 @@ public class GmeApiClient {
             throw new IllegalStateException("GME RequestData returned no content");
         }
 
-        return parseMarketPriceContentResponse(contentResponse, granularity);
+        try {
+            return parseMarketPriceContentResponse(contentResponse, granularity);
+        } catch (IllegalArgumentException | JsonParseException e) {
+            throw new IllegalStateException("GME RequestData returned invalid market data", e);
+        }
     }
 
     /**
