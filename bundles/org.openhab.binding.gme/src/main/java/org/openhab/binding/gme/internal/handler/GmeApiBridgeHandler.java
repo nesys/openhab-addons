@@ -57,6 +57,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
     private static final Set<String> MARKET_ZONES = Set.of("NORD", "CNOR", "CSUD", "SUD", "CALA", "SICI", "SARD");
 
     private final GmeApiClient apiClient;
+    private final long initialAuthRetrySeconds;
     private final GmeCredentialTracker credentialTracker;
     private final GmePasswordAge passwordAge;
     private @Nullable GmeAuthManager authManager;
@@ -74,8 +75,14 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
     }
 
     GmeApiBridgeHandler(Bridge bridge, HttpClient httpClient, Storage<String> storage, Clock clock) {
+        this(bridge, new GmeApiClient(httpClient), storage, clock, 5);
+    }
+
+    GmeApiBridgeHandler(Bridge bridge, GmeApiClient apiClient, Storage<String> storage, Clock clock,
+            long initialAuthRetrySeconds) {
         super(bridge);
-        this.apiClient = new GmeApiClient(httpClient);
+        this.apiClient = apiClient;
+        this.initialAuthRetrySeconds = initialAuthRetrySeconds;
         this.credentialTracker = new GmeCredentialTracker(storage, GME_ZONE, clock);
         this.passwordAge = new GmePasswordAge(GME_ZONE, clock);
     }
@@ -116,7 +123,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
 
         updateStatus(ThingStatus.UNKNOWN);
 
-        scheduler.execute(() -> authenticate(generation, config, 5));
+        scheduler.execute(() -> authenticate(generation, config, initialAuthRetrySeconds));
     }
 
     private void authenticate(long generation, GmeApiConfiguration config, long retrySeconds) {
