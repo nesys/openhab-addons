@@ -212,6 +212,7 @@ public class GmeApiBridgeHandler extends BaseBridgeHandler {
         synchronized (lifecycleLock) {
             lifecycleGeneration.incrementAndGet();
             cancelPasswordRefresh();
+            cancelAuthenticationRetry();
             authManager = null;
         }
         super.dispose();
